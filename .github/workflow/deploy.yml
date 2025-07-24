@@ -1,0 +1,44 @@
+name: Deploy Backend to Dev Server
+on:
+  push:
+    branches:
+      - dev
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Sync backend folder via rsync
+        uses: appleboy/rsync-action@v0.1.6
+        with:
+          host: ${{ secrets.DEV_SERVER_IP }}
+          username: ${{ secrets.DEV_SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "backend/"
+          target: "/home/stargatez/www/backend/"
+          delete: true
+          exclude: |
+            .env
+            storage/
+            vendor/
+
+      - name: Run backend setup commands over SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.DEV_SERVER_IP }}
+          username: ${{ secrets.DEV_SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd /home/stargatez/www/backend
+            composer install --no-dev --optimize-autoloader
+            php artisan config:clear
+            php artisan cache:clear
+            php artisan storage:link
+            php artisan migrate --force
+            sudo chown -R www-data:www-data /home/stargatez/www/backend
+            sudo chmod -R 775 storage bootstrap/cache
+
